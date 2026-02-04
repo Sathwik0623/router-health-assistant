@@ -1,0 +1,16 @@
+# Router Health Analyzer - Git Ignore Rules
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+env/
+
+# Secrets
+.env
+*.key
+*.pem
+
+# Logs
+logs/

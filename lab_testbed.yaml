@@ -1,0 +1,103 @@
+testbed:
+  name: Routing Health Analyzer Lab
+devices:
+  terminal_server:
+    os: linux
+    type: server
+    credentials:
+      default:
+        username: change_me
+        password: change_me
+    connections:
+      cli:
+        protocol: ssh
+        ip: cxl-rtp-ssp-cml-038.cisco.com
+        port: 22
+  R1:
+    os: ios
+    type: router
+    platform: iosv
+    credentials:
+      default:
+        username: cisco
+        password: cisco
+    connections:
+      defaults:
+        class: unicon.Unicon
+      a:
+        protocol: telnet
+        proxy: terminal_server
+        command: open /Routing Health Analyzer Lab/R1/0
+  R2:
+    os: ios
+    type: router
+    platform: iosv
+    credentials:
+      default:
+        username: cisco
+        password: cisco
+    connections:
+      defaults:
+        class: unicon.Unicon
+      a:
+        protocol: telnet
+        proxy: terminal_server
+        command: open /Routing Health Analyzer Lab/R2/0
+  R3:
+    os: ios
+    type: router
+    platform: iosv
+    credentials:
+      default:
+        username: cisco
+        password: cisco
+    connections:
+      defaults:
+        class: unicon.Unicon
+      a:
+        protocol: telnet
+        proxy: terminal_server
+        command: open /Routing Health Analyzer Lab/R3/0
+topology:
+  R1:
+    interfaces:
+      Loopback0:
+        type: loopback
+      GigabitEthernet0/0:
+        link: 90192107-12ca-4498-8979-892e5bc2ede1
+        type: ethernet
+      GigabitEthernet0/1:
+        link: e209231e-8091-4628-8b21-6c685fc67f50
+        type: ethernet
+      GigabitEthernet0/2:
+        type: ethernet
+      GigabitEthernet0/3:
+        type: ethernet
+  R2:
+    interfaces:
+      Loopback0:
+        type: loopback
+      GigabitEthernet0/0:
+        link: 90192107-12ca-4498-8979-892e5bc2ede1
+        type: ethernet
+      GigabitEthernet0/1:
+        link: 38323765-740b-473e-ad63-f6d4663a9f37
+        type: ethernet
+      GigabitEthernet0/2:
+        type: ethernet
+      GigabitEthernet0/3:
+        type: ethernet
+  R3:
+    interfaces:
+      Loopback0:
+        type: loopback
+      GigabitEthernet0/0:
+        link: e209231e-8091-4628-8b21-6c685fc67f50
+        type: ethernet
+      GigabitEthernet0/1:
+        link: 38323765-740b-473e-ad63-f6d4663a9f37
+        type: ethernet
+      GigabitEthernet0/2:
+        type: ethernet
+      GigabitEthernet0/3:
+        type: ethernet
