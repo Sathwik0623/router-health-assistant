@@ -5,33 +5,52 @@ class HealthScorer:
     """Calculate overall device health from individual component health"""
     
     @staticmethod
-    def calculate_overall_health(interface_health, cpu_health, memory_health, bgp_health):
+    def calculate_overall_health(component_statuses):
         """
-        Calculate overall device health
+        Calculate overall device health from multiple components
         
         Args:
-            interface_health (str): "Good" or "Warning"
-            cpu_health (str): "OK" or "CRITICAL"
-            memory_health (str): "OK" or "CRITICAL"
-            bgp_health (str): "OK", "CRITICAL", or "NOT_CONFIGURED"
+            component_statuses (dict): {
+                "interface_health": "Good|Warning",
+                "cpu_health": "OK|CRITICAL|Unknown",
+                "memory_health": "OK|CRITICAL|Unknown",
+                "bgp_health": "OK|CRITICAL|NOT_CONFIGURED",
+                "ospf_health": "OK|WARNING|CRITICAL|NOT_CONFIGURED",
+                ...
+            }
         
         Returns:
             str: "HEALTHY" or "UNHEALTHY"
         """
-        if bgp_health == "NOT_CONFIGURED":
-            # BGP not configured, only check other metrics
-            if (interface_health == "Good" and 
-                cpu_health == "OK" and 
-                memory_health == "OK"):
-                return "HEALTHY"
-            else:
+        # Extract component statuses with defaults
+        interface_health = component_statuses.get("interface_health", "Unknown")
+        cpu_health = component_statuses.get("cpu_health", "Unknown")
+        memory_health = component_statuses.get("memory_health", "Unknown")
+        bgp_health = component_statuses.get("bgp_health", "NOT_CONFIGURED")
+        ospf_health = component_statuses.get("ospf_health", "NOT_CONFIGURED")
+        
+        # Critical components that must be OK for HEALTHY status
+        critical_checks = [
+            interface_health in ["Good"],
+            cpu_health in ["OK"],
+            memory_health in ["OK"]
+        ]
+        
+        # If any critical component is not OK, device is UNHEALTHY
+        if not all(critical_checks):
+            return "UNHEALTHY"
+        
+        # Check BGP health only if configured
+        if bgp_health != "NOT_CONFIGURED" and bgp_health not in ["OK"]:
+            return "UNHEALTHY"
+        
+        # Check OSPF health only if configured
+        if ospf_health != "NOT_CONFIGURED":
+            # CRITICAL OSPF issues make device UNHEALTHY
+            if ospf_health == "CRITICAL":
                 return "UNHEALTHY"
-        else:
-            # BGP configured, include in health check
-            if (interface_health == "Good" and 
-                cpu_health == "OK" and 
-                memory_health == "OK" and 
-                bgp_health == "OK"):
-                return "HEALTHY"
-            else:
-                return "UNHEALTHY"
+            # WARNING is acceptable (device still HEALTHY but needs attention)
+            # This allows for LSA warnings without failing health check
+        
+        # All checks passed
+        return "HEALTHY"

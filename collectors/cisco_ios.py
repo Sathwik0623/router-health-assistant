@@ -39,19 +39,73 @@ class CiscoIOSCollector:
             channel.send("\n")
         return buffer
     
-    def _robust_read(self, channel, timeout=3):
-        """Read command output with timeout"""
-        time.sleep(1)
+    def _clear_buffer(self, channel):
+        """Completely clear the SSH channel buffer"""
+        attempts = 0
+        max_attempts = 10
+        
+        while attempts < max_attempts:
+            if channel.recv_ready():
+                channel.recv(65535)
+                time.sleep(0.2)
+                attempts = 0  # Reset if we got data
+            else:
+                attempts += 1
+                time.sleep(0.1)
+    
+    def _robust_read_until_prompt(self, channel, timeout=8):
+        """
+        Read output until we see the prompt again
+        
+        Args:
+            channel: SSH channel
+            timeout: Maximum time to wait
+        
+        Returns:
+            str: Command output (without the command echo and prompt)
+        """
         output = ""
         start_time = time.time()
+        prompt_seen = False
+        
+        # Initial delay to let command start executing
+        time.sleep(0.5)
+        
         while time.time() - start_time < timeout:
             if channel.recv_ready():
-                while channel.recv_ready():
-                    output += channel.recv(65535).decode("utf-8", errors="ignore")
-                    time.sleep(0.1)
-                return output
-            time.sleep(0.3)
-        return output
+                chunk = channel.recv(65535).decode("utf-8", errors="ignore")
+                output += chunk
+                
+                # Check if we've received the prompt (indicating command is done)
+                if "#" in chunk or ">" in chunk:
+                    prompt_seen = True
+                    time.sleep(0.2)  # Small delay to catch any trailing data
+                    
+                    # Read any remaining data
+                    while channel.recv_ready():
+                        output += channel.recv(65535).decode("utf-8", errors="ignore")
+                        time.sleep(0.1)
+                    break
+                
+                time.sleep(0.1)
+            else:
+                time.sleep(0.2)
+        
+        # Clean up the output
+        # Remove the command echo (first line)
+        lines = output.splitlines()
+        if len(lines) > 0:
+            # Remove first line (command echo)
+            lines = lines[1:]
+        
+        # Remove the prompt line (last line with # or >)
+        if len(lines) > 0:
+            last_line = lines[-1].strip()
+            if "#" in last_line or ">" in last_line:
+                lines = lines[:-1]
+        
+        cleaned_output = "\n".join(lines)
+        return cleaned_output
     
     def collect_from_device(self, device_name, proxy_command, commands):
         """
@@ -77,6 +131,9 @@ class CiscoIOSCollector:
                        password=self.password, timeout=10)
             
             channel = ssh.invoke_shell()
+            channel.transport.set_keepalive(30)
+            
+            # Connect via terminal server
             channel.send(proxy_command + "\n")
             
             console_output = self._wait_for_prompt(channel, timeout=15)
@@ -88,17 +145,24 @@ class CiscoIOSCollector:
             
             result["reachable"] = True
             
-            # Prepare terminal
+            # Disable paging
             channel.send("terminal length 0\n")
             time.sleep(0.5)
-            channel.recv(65535)
+            self._clear_buffer(channel)
             
-            # Execute commands
+            # Execute commands with proper buffer management
             for cmd in commands:
-                timeout = 4 if "bgp" in cmd.lower() else 3
-                channel.send(cmd + "\n")
-                raw_output = self._robust_read(channel, timeout=timeout)
+                # Clear buffer before sending command
+                self._clear_buffer(channel)
                 
+                # Send command
+                channel.send(cmd + "\n")
+                
+                # Read output until prompt returns
+                timeout = 8 if "bgp" in cmd.lower() else 6
+                raw_output = self._robust_read_until_prompt(channel, timeout=timeout)
+                
+                # Parse with TextFSM
                 structured = None
                 if raw_output:
                     try:
@@ -112,7 +176,9 @@ class CiscoIOSCollector:
                     "structured": structured
                 }
             
+            # Graceful disconnect
             channel.send("exit\n")
+            time.sleep(0.5)
             channel.close()
             ssh.close()
             
